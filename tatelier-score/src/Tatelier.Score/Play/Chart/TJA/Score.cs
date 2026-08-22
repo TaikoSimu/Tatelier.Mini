@@ -137,6 +137,11 @@ namespace Tatelier.Score.Play.Chart.TJA
 		public LinkedList<GogoItem> GogoList = new LinkedList<GogoItem>();
 
 		/// <summary>
+		/// #LYRICで指定された歌詞リスト
+		/// </summary>
+		public LinkedList<LyricItem> LyricList = new LinkedList<LyricItem>();
+
+		/// <summary>
 		/// 分岐有無
 		/// </summary>
 		public bool HasBranch = false;
@@ -222,6 +227,25 @@ namespace Tatelier.Score.Play.Chart.TJA
 			{
 				Gogo = false,
 				StartTime = (int)info.PivotMillisec
+			});
+			return SUCCESS;
+		}
+		#endregion
+
+		#region LYRIC
+		/// <summary>
+		/// #LYRIC &lt;歌詞テキスト&gt;
+		/// TJAP3系シミュレータと同様、その時点(PivotMillisec)から表示する歌詞テキストを登録する。
+		/// 引数無し(#LYRICのみ)の場合は、歌詞表示を空欄にする命令として扱う(歌詞の削除・切り替わり目に使われる)
+		/// </summary>
+		int SetLYRIC(NotePivotInfo info, string[] args)
+		{
+			// 引数がスペースを含む歌詞の場合に備え、分割された引数を再結合する
+			// (args.Length == 0の場合はstring.Joinが空文字列になり、歌詞を空欄にする)
+			LyricList.AddLast(new LyricItem()
+			{
+				StartTime = (int)info.PivotMillisec,
+				Text = string.Join(" ", args),
 			});
 			return SUCCESS;
 		}
@@ -503,6 +527,9 @@ namespace Tatelier.Score.Play.Chart.TJA
 				// ゴーゴー関連
 				{ "GOGOSTART", SetGOGOSTART },
 				{ "GOGOEND", SetGOGOEND },
+
+				// 歌詞
+				{ "LYRIC", SetLYRIC },
 
 				// 分岐関係
 				{ "BRANCHSTART",  SetBRANCHSTART },

@@ -30,6 +30,8 @@ namespace Tatelier.Mini.Scene
 
 		CommonInfo info;
 
+		Lyric lyric;
+
 		Player[] players = new Player[1];
 
         TJA tja;
@@ -43,6 +45,9 @@ namespace Tatelier.Mini.Scene
         int nowMillisec = 0;
 
         const int StartOffset = -2000;
+
+        const float ScreenWidth = 512;
+        const float LyricDrawPointY = 340;
 
         readonly string imageFolder = "img";
         readonly string soundFolder = "snd";
@@ -99,6 +104,8 @@ namespace Tatelier.Mini.Scene
 
             var tjaDir = Path.GetDirectoryName(tjaPath);
             string waveFullPath = Path.Combine(tjaDir, tja.WaveFileName);
+
+            lyric = new Lyric(tja.GetLyricFilePath(tjaDir), tja.Scores[0].LyricList);
 
             bgm = LoadSoundMem(waveFullPath);
 
@@ -539,6 +546,8 @@ namespace Tatelier.Mini.Scene
 			UpdateYourself(0);
 
             song.Update();
+
+            lyric.Update(nowMillisec);
         }
 
         public override void Draw()
@@ -552,6 +561,8 @@ namespace Tatelier.Mini.Scene
                     player.ScoreRenderer.DrawNoteBranchScore(bscore, nowMillisec);
                 }
             }
+
+            lyric.Draw(ScreenWidth / 2, LyricDrawPointY);
         }
 
         private string GetDebuggerDisplay()

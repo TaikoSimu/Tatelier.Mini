@@ -82,6 +82,7 @@
     <Compile Include="Play\Background.cs" />
     <Compile Include="Play\HBScrollScoreRenderer.cs" />
     <Compile Include="Play\InputControlItemPlay.cs" />
+    <Compile Include="Play\Lyric.cs" />
     <Compile Include="Play\MeasureLineImageControl.cs" />
     <Compile Include="Play\NormalScoreRenderer.cs" />
     <Compile Include="Play\NoteFieldControl.cs" />
