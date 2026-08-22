@@ -552,8 +552,6 @@ namespace Tatelier.Mini.Scene
                     player.ScoreRenderer.DrawNoteBranchScore(bscore, nowMillisec);
                 }
             }
-
-            DrawGraph(0, 0, players[0].NoteImageControl.GetImageHandle(Score.Component.NoteSystem.NoteType.Roll), TRUE);
         }
 
         private string GetDebuggerDisplay()

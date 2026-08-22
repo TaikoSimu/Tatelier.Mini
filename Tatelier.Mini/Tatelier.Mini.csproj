@@ -113,6 +113,6 @@
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
-    <PostBuildEvent>copy $(ProjectDir)..\Tatelier.DxDLL\x64\DxLib_x64.dll $(TargetDir)DxLib_x64.dll</PostBuildEvent>
+    <PostBuildEvent>copy "$(ProjectDir)..\Tatelier.DxDLL\x64\DxLib_x64.dll" "$(TargetDir)DxLib_x64.dll"</PostBuildEvent>
   </PropertyGroup>
 </Project>

@@ -9,6 +9,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Tatelier.DxLibDLL", "Tateli
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Tatelier.Mini", "Tatelier.Mini\Tatelier.Mini.csproj", "{F8F3D532-C4A8-4714-AA11-BB5F6E364529}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Tatelier.Common", "Tatelier.Common\Tatelier.Common.csproj", "{1B81D1D7-556D-4039-855C-756C4AFF1E39}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HjsonEx", "hjson-cs-ex\src\HjsonEx\HjsonEx.csproj", "{43A279B2-89AF-43EC-A72E-5669AA268368}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -41,6 +45,22 @@ Global
 		{F8F3D532-C4A8-4714-AA11-BB5F6E364529}.Release|x64.Build.0 = Release|x64
 		{F8F3D532-C4A8-4714-AA11-BB5F6E364529}.Release|x86.ActiveCfg = Release|x86
 		{F8F3D532-C4A8-4714-AA11-BB5F6E364529}.Release|x86.Build.0 = Release|x86
+		{1B81D1D7-556D-4039-855C-756C4AFF1E39}.Debug|x64.ActiveCfg = Debug|x64
+		{1B81D1D7-556D-4039-855C-756C4AFF1E39}.Debug|x64.Build.0 = Debug|x64
+		{1B81D1D7-556D-4039-855C-756C4AFF1E39}.Debug|x86.ActiveCfg = Debug|x86
+		{1B81D1D7-556D-4039-855C-756C4AFF1E39}.Debug|x86.Build.0 = Debug|x86
+		{1B81D1D7-556D-4039-855C-756C4AFF1E39}.Release|x64.ActiveCfg = Release|x64
+		{1B81D1D7-556D-4039-855C-756C4AFF1E39}.Release|x64.Build.0 = Release|x64
+		{1B81D1D7-556D-4039-855C-756C4AFF1E39}.Release|x86.ActiveCfg = Release|x86
+		{1B81D1D7-556D-4039-855C-756C4AFF1E39}.Release|x86.Build.0 = Release|x86
+		{43A279B2-89AF-43EC-A72E-5669AA268368}.Debug|x64.ActiveCfg = Debug|x64
+		{43A279B2-89AF-43EC-A72E-5669AA268368}.Debug|x64.Build.0 = Debug|x64
+		{43A279B2-89AF-43EC-A72E-5669AA268368}.Debug|x86.ActiveCfg = Debug|x86
+		{43A279B2-89AF-43EC-A72E-5669AA268368}.Debug|x86.Build.0 = Debug|x86
+		{43A279B2-89AF-43EC-A72E-5669AA268368}.Release|x64.ActiveCfg = Release|x64
+		{43A279B2-89AF-43EC-A72E-5669AA268368}.Release|x64.Build.0 = Release|x64
+		{43A279B2-89AF-43EC-A72E-5669AA268368}.Release|x86.ActiveCfg = Release|x86
+		{43A279B2-89AF-43EC-A72E-5669AA268368}.Release|x86.Build.0 = Release|x86
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
