@@ -128,11 +128,12 @@ namespace Tatelier.Score.Play.Chart.TJA
 		/// <param name="startDrawPointX">描画開始座標X</param>
 		/// <param name="finishDrawPointX">描画終了座標X</param>
 		/// <param name="playOptionScrollSpeed">設定部のスクロールスピード</param>
-		public void BuildScoreRendererData(float oneMeasureWidth, float startDrawPointX, float finishDrawPointX, float playOptionScrollSpeed)
+		/// <param name="hbScrollDensityScale">HBSCROLL専用の表示密度倍率(Score.BuildScoreRendererData参照)</param>
+		public void BuildScoreRendererData(float oneMeasureWidth, float startDrawPointX, float finishDrawPointX, float playOptionScrollSpeed, float hbScrollDensityScale = 1.0f)
 		{
 			foreach (var item in Scores)
 			{
-				item.BuildScoreRendererData(oneMeasureWidth, startDrawPointX, finishDrawPointX, playOptionScrollSpeed);
+				item.BuildScoreRendererData(oneMeasureWidth, startDrawPointX, finishDrawPointX, playOptionScrollSpeed, hbScrollDensityScale);
 			}
 		}
 

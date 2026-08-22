@@ -662,38 +662,62 @@ namespace Tatelier.Score.Play.Chart.TJA
 			foreach (var branchScore in BranchScoreControl.GetAllBranchScoreList().Select(v => v.BranchScore))
 			{
 				branchScore.HBScrollDrawDataControl.Clear();
-				BPM prevBPMInfo = branchScore.BPMList.FirstOrDefault();
+
+				// 1周目: 全BPM区間分のdataItemを先に構築する(この時点ではまだ
+				// ノーツ・小節線への割り当ては行わない。2周目で全区間が出揃った
+				// 状態から検索できるようにするため)。
+				var pending = new List<(BPM bpmInfo, HBScrollDrawDataItem dataItem)>();
 				foreach (var bpmInfo in branchScore.BPMList)
 				{
 					var dataItem = new HBScrollDrawDataItem()
 					{
 						StartMillisec = bpmInfo.StartMillisec,
 						FinishMillisec = bpmInfo.FinishMillisec,
+						IsDelay = bpmInfo.IsDelay,
 					};
 
-					var currentBPMInfo = bpmInfo;
-
-                    dataItem.StartPoint = branchScore.HBScrollDrawDataControl.ItemList?.LastOrDefault()?.FinishPoint ?? currentBPMInfo.GetDivision(dataItem.StartMillisec) * areaWidth;
-					dataItem.FinishPoint = dataItem.StartPoint + currentBPMInfo.GetDivision(dataItem.FinishMillisec - dataItem.StartMillisec) * areaWidth;
-					dataItem.IsDelay = bpmInfo.IsDelay;
+					dataItem.StartPoint = branchScore.HBScrollDrawDataControl.ItemList?.LastOrDefault()?.FinishPoint ?? bpmInfo.GetDivision(dataItem.StartMillisec) * areaWidth;
+					dataItem.FinishPoint = dataItem.StartPoint + bpmInfo.GetDivision(dataItem.FinishMillisec - dataItem.StartMillisec) * areaWidth;
 
 					branchScore.HBScrollDrawDataControl.Add(dataItem);
+					pending.Add((bpmInfo, dataItem));
+				}
 
+				// 2周目: 各ノーツ・小節線の座標を計算する。
+				// マイナスBPM/マイナス小節が絡む譜面では、音符が本来属するBPM区間
+				// (dataItem)の時間範囲に、その音符自身のStartMillisecが実際には
+				// 含まれていないケースがある。そのまま計算すると0～1の範囲を外れた
+				// perが0/1にクランプされ、本来離れているはずの音符同士が同じ座標に
+				// 潰れてしまう(例: 連打の開始・終了ノーツが同座標になり胴体が
+				// 伸びなくなる)。IsApplicable()（マイナスBPM区間でも安全に判定できる、
+				// 描画側で既に使われているのと同じ判定）で実際に該当する区間を
+				// 探し直すことでこれを回避する。見つからない場合のみ、従来通り
+				// 割り当て区間をそのまま使う(クランプはフォールバックとして残す)。
+				foreach (var (bpmInfo, dataItem) in pending)
+				{
 					foreach (var note in bpmInfo.NoteList)
 					{
-						double per = dataItem.GetElapsedRate(note.StartMillisec);
-						note.HBScrollStartPointX = dataItem.GetHBScrollPivotX(per);
-						note.HBScrollDrawDataItem = dataItem;
+						var actualItem = dataItem.IsApplicable(note.StartMillisec)
+							? dataItem
+							: branchScore.HBScrollDrawDataControl.ItemList.LastOrDefault(v => v.IsApplicable(note.StartMillisec)) ?? dataItem;
+
+						double per = actualItem.GetElapsedRate(note.StartMillisec);
+						per = Math.Max(0, Math.Min(1, per));
+						note.HBScrollStartPointX = actualItem.GetHBScrollPivotX(per);
+						note.HBScrollDrawDataItem = actualItem;
 					}
 
-					foreach(var measure in bpmInfo.MeasureLineList)
+					foreach (var measure in bpmInfo.MeasureLineList)
 					{
-						double per = dataItem.GetElapsedRate(measure.StartMillisec);
-						measure.HBScrollStartPointX = dataItem.GetHBScrollPivotX(per);
-						measure.HBScrollDrawDataItem = dataItem;
-					}
+						var actualItem = dataItem.IsApplicable(measure.StartMillisec)
+							? dataItem
+							: branchScore.HBScrollDrawDataControl.ItemList.LastOrDefault(v => v.IsApplicable(measure.StartMillisec)) ?? dataItem;
 
-					prevBPMInfo = bpmInfo;
+						double per = actualItem.GetElapsedRate(measure.StartMillisec);
+						per = Math.Max(0, Math.Min(1, per));
+						measure.HBScrollStartPointX = actualItem.GetHBScrollPivotX(per);
+						measure.HBScrollDrawDataItem = actualItem;
+					}
 				}
 			}
 		}
@@ -705,7 +729,11 @@ namespace Tatelier.Score.Play.Chart.TJA
 		/// <param name="startDrawPointX">描画開始座標X</param>
 		/// <param name="finishDrawPointX">描画終了座標X</param>
 		/// <param name="playOptionScrollSpeed">設定部のスクロールスピード</param>
-		public void BuildScoreRendererData(float oneMeasureWidth, float startDrawPointX, float finishDrawPointX, float playOptionScrollSpeed)
+		/// <param name="hbScrollDensityScale">
+		/// HBSCROLL専用の表示密度倍率。通常スクロール(MovementPerMillisec)や
+		/// HBSCROLLの他の計算には一切影響しない。1.0で従来通りの見た目。
+		/// </param>
+		public void BuildScoreRendererData(float oneMeasureWidth, float startDrawPointX, float finishDrawPointX, float playOptionScrollSpeed, float hbScrollDensityScale = 1.0f)
 		{
 			// 音符の設定
 			foreach (var note in Notes)
@@ -723,7 +751,7 @@ namespace Tatelier.Score.Play.Chart.TJA
 			{
 				case ScoreType.HBScroll:
 					{
-						SetDrawHBScrollTime(oneMeasureWidth);
+						SetDrawHBScrollTime(oneMeasureWidth * hbScrollDensityScale);
 					}
 					break;
 			}
