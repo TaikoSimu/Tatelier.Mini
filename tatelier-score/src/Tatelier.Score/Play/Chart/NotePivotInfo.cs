@@ -122,6 +122,12 @@ namespace Tatelier.Score.Play.Chart
 		public List<int> BalloonValueList = null;
 
 		/// <summary>
+		/// #SENOTECHANGEで予約された、次の対象音符に適用する音符文字種別。
+		/// 対象音符(ドン/カッ系)が生成された時点で消費され、nullに戻る。
+		/// </summary>
+		public NoteTextType? PendingNoteTextTypeOverride = null;
+
+		/// <summary>
 		/// コンストラクタ
 		/// </summary>
 		public NotePivotInfo() { }

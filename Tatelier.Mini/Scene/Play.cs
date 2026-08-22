@@ -73,6 +73,7 @@ namespace Tatelier.Mini.Scene
                 players[i] = new Player
                 {
                     NoteImageControl = new NoteImageControl("img\\notes.png"),
+                    NoteText = new NoteText("img\\notetext.png"),
                     NoteFieldControl = new NoteFieldControl(imageFolder),
                     TaikoSEControl = new TaikoSEControl(soundFolder),
                     Input = new InputControlItemPlay(),

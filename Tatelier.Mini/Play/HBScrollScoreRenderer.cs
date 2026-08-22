@@ -44,6 +44,11 @@ namespace Tatelier.Mini.Play
 		/// 演奏オプションスクロールスピード
 		/// </summary>
 		double PlayOptionScrollSpeed { get; }
+
+		/// <summary>
+		/// 音符文字(#SENOTECHANGE)描画
+		/// </summary>
+		NoteText NoteText { get; }
 	}
 
 	/// <summary>
@@ -161,6 +166,7 @@ namespace Tatelier.Mini.Play
 										if (target.FinishDrawPointX < x && x < target.StartDrawPointX)
 										{
 											DrawRotaGraphFastF(x, y, 1.0F, 0.0F, handle, DX_TRUE);
+											target.NoteText.Draw(x, y, note.NoteTextType);
 										}
 									}
 									break;
@@ -187,6 +193,7 @@ namespace Tatelier.Mini.Play
 										if (target.FinishDrawPointX < x && x < target.StartDrawPointX)
 										{
 											DrawRotaGraphFastF(x, y, 1.0F, 0.0F, handle, DX_TRUE);
+											target.NoteText.Draw(x, y, note.NoteTextType);
 										}
 									}
 									break;

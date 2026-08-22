@@ -34,6 +34,11 @@ namespace Tatelier.Mini.Play
 		/// 小節線画像管理
 		/// </summary>
 		MeasureLineImageControl BarLineImageControl { get; }
+
+		/// <summary>
+		/// 音符文字(#SENOTECHANGE)描画
+		/// </summary>
+		NoteText NoteText { get; }
 	}
 	internal interface IScoreRenderer
 	{
@@ -72,6 +77,8 @@ namespace Tatelier.Mini.Play
 				float y = module.JudgeFramePoint.CY;
 
 				DrawRotaGraphFastF(x, y, 1.0F, 0.0F, handle, DX_TRUE);
+
+				module.NoteText.Draw(x, y, note.NoteTextType);
 			}
 		}
 
@@ -98,6 +105,8 @@ namespace Tatelier.Mini.Play
 				}
 
 				DrawRotaGraphFastF(x, y, 1.0F, 0.0F, handle, DX_TRUE);
+
+				module.NoteText.Draw(x, y, note.NoteTextType);
 			}
 		}
 
