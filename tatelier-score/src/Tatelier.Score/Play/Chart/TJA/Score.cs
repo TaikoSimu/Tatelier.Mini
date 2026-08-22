@@ -232,6 +232,64 @@ namespace Tatelier.Score.Play.Chart.TJA
 		}
 		#endregion
 
+		#region SENOTECHANGE
+		/// <summary>
+		/// #SENOTECHANGEに渡された番号を、この譜面ライブラリが扱える音符文字種別へ変換する
+		/// </summary>
+		/// <remarks>
+		/// TJAP3系シミュレータの仕様(1始まり)に合わせている:
+		/// 1:ドン, 2:ド, 3:コ, 4:カッ, 5:カ, 6:ドン(大), 7:カッ(大), 8:連打, 11:連打(大), 12:ふうせん
+		/// このプロジェクトの音符文字画像には「大」専用のグラフィックが無いため、
+		/// 6と7はそれぞれ通常のドン/カッ表記へ縮退させる。
+		/// 9(ー) / 10(ーっ!!)に相当する文字種は用意されていないため未対応。
+		/// </remarks>
+		static NoteTextType? GetSenoteChangeNoteTextType(int value)
+		{
+			switch (value)
+			{
+				case 1: return NoteTextType.Don;
+				case 2: return NoteTextType.Do;
+				case 3: return NoteTextType.Ko;
+				case 4: return NoteTextType.Katt;
+				case 5: return NoteTextType.Kat;
+				case 6: return NoteTextType.Don;
+				case 7: return NoteTextType.Katt;
+				case 8: return NoteTextType.Renda;
+				case 11: return NoteTextType.Renda;
+				case 12: return NoteTextType.GekiRenda;
+				default: return null;
+			}
+		}
+
+		int SetSENOTECHANGE(NotePivotInfo info, string[] args)
+		{
+			const int ERROR_ARGS = -1;
+			const int ERROR_PARSE = -2;
+			const int ERROR_RANGE = -3;
+
+			if (args.Length == 0)
+			{
+				return ERROR_ARGS;
+			}
+
+			if (!int.TryParse(args[0], out var value))
+			{
+				return ERROR_PARSE;
+			}
+
+			var noteTextType = GetSenoteChangeNoteTextType(value);
+			if (noteTextType == null)
+			{
+				return ERROR_RANGE;
+			}
+
+			// 直後に生成される1音符(ドン/カッ)にのみ適用される予約値として保持する
+			info.PendingNoteTextTypeOverride = noteTextType;
+
+			return SUCCESS;
+		}
+		#endregion
+
 		#region LYRIC
 		/// <summary>
 		/// #LYRIC &lt;歌詞テキスト&gt;
@@ -527,6 +585,9 @@ namespace Tatelier.Score.Play.Chart.TJA
 				// ゴーゴー関連
 				{ "GOGOSTART", SetGOGOSTART },
 				{ "GOGOEND", SetGOGOEND },
+
+				// 音符文字
+				{ "SENOTECHANGE", SetSENOTECHANGE },
 
 				// 歌詞
 				{ "LYRIC", SetLYRIC },

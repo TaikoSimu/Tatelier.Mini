@@ -87,6 +87,7 @@
     <Compile Include="Play\NormalScoreRenderer.cs" />
     <Compile Include="Play\NoteFieldControl.cs" />
     <Compile Include="Play\NoteImageControl.cs" />
+    <Compile Include="Play\NoteText.cs" />
     <Compile Include="Play\Player.cs" />
     <Compile Include="Play\Song.cs" />
     <Compile Include="Play\TaikoSEControl.cs" />

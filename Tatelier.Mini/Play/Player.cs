@@ -15,6 +15,8 @@ namespace Tatelier.Mini.Play
 
         public NoteImageControl NoteImageControl;
 
+        public NoteText NoteText;
+
         public NoteFieldControl NoteFieldControl;
 
         public Tatelier.Score.Play.Chart.TJA.Score Score;
@@ -33,6 +35,8 @@ namespace Tatelier.Mini.Play
         NoteImageControl INormalScoreRendererTarget.NoteImageControl => NoteImageControl;
 
         MeasureLineImageControl INormalScoreRendererTarget.BarLineImageControl { get; } = new MeasureLineImageControl("");
+
+        NoteText INormalScoreRendererTarget.NoteText => NoteText;
         #endregion
 
         #region IHBScrollScoreRendererTarget
@@ -47,6 +51,8 @@ namespace Tatelier.Mini.Play
         float IHBScrollScoreRendererTarget.FinishDrawPointX => FinishDrawPointX;
 
         double IHBScrollScoreRendererTarget.PlayOptionScrollSpeed => 1.0;
+
+        NoteText IHBScrollScoreRendererTarget.NoteText => NoteText;
         #endregion
     }
 }

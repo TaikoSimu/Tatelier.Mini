@@ -211,6 +211,22 @@ namespace Tatelier.Score.Play.Chart.TJA
 				NoteTextType = GetNoteTextType(NoteType);
 			}
 
+			// #SENOTECHANGEによる音符文字の上書き
+			// ※この命令の直後のドン/カッ音符1つにのみ適用される。
+			//   あべこべ・ランダムが有効な場合、実際に叩くべき音符種別と表示が食い違って
+			//   誤読を招くため適用しない(Issue#2の動作条件)。
+			if (info.PendingNoteTextTypeOverride.HasValue)
+			{
+				var overrideType = info.PendingNoteTextTypeOverride.Value;
+				info.PendingNoteTextTypeOverride = null;
+
+				if (!info.IsInverse && !info.IsNoteRandom
+					&& (NoteType == NoteType.Don || NoteType == NoteType.Kat))
+				{
+					NoteTextType = overrideType;
+				}
+			}
+
             StartMillisec = (int)info.PivotMillisec;
 			FinishMillisec = StartMillisec;
 
