@@ -98,6 +98,7 @@
     <Compile Include="SceneControl.cs" />
     <Compile Include="Scene\Play.cs" />
     <Compile Include="Scene\SceneBase.cs" />
+    <Compile Include="TJASafeLoader.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />

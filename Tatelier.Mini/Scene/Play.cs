@@ -58,15 +58,32 @@ namespace Tatelier.Mini.Scene
 			info = new CommonInfo();
 
 			tja = new TJA();
+            // TJALoadPlayerInfoListを空のままにすると、tja内に実際に存在するコースを
+            // すべて自動的に読み込む(TJA.Load()のisallモード)。以前は"Oni"固定で読み込んで
+            // いたが、読み込んだtjaにOniコースが存在しない場合(このtjaのようなEdit(裏)
+            // 譜面など)にtja.Scoresが空になり、直後のtja.Scores[0]でインデックス範囲外
+            // 例外が発生してクラッシュしていたため、実際に存在するコースを自動選択する
+            // 方式に変更した。
             tja.Load(new TJALoadInfo()
             {
-                FilePath = tjaPath,
-                TJALoadPlayerInfoList = new TJALoadPlayerInfo[]
-                {
-                    new TJALoadPlayerInfo("Oni"),
-                },
-
+                FilePath = TJASafeLoader.GetSafeFilePath(tjaPath),
             });
+
+            // 難易度の優先順位(高い方から)で、実際に存在するコースを選ぶ。
+            // どれにも一致しなければ、ファイル内で最初に見つかったコースにフォールバックする。
+            string[] coursePriority = { "Oni", "Edit", "Hard", "Normal", "Easy" };
+            var selectedScore = coursePriority
+                .Select(c => tja.Scores.FirstOrDefault(v => v.CourseName == c))
+                .FirstOrDefault(v => v != null)
+                ?? tja.Scores.FirstOrDefault();
+
+            if (selectedScore == null)
+            {
+                // 譜面を1件も読み込めなかった場合は、これ以上進めても必ずクラッシュするため
+                // ここで安全に諦める。
+                Trace.WriteLine($"譜面を読み込めませんでした: {tjaPath}");
+                return;
+            }
 
 			for (int i = 0; i < players.Length; i++)
             {
@@ -77,7 +94,7 @@ namespace Tatelier.Mini.Scene
                     NoteFieldControl = new NoteFieldControl(imageFolder),
                     TaikoSEControl = new TaikoSEControl(soundFolder),
                     Input = new InputControlItemPlay(),
-                    Score = tja.Scores[i]
+                    Score = selectedScore
                 };
 
                 var player = players[i];
@@ -106,7 +123,7 @@ namespace Tatelier.Mini.Scene
             var tjaDir = Path.GetDirectoryName(tjaPath);
             string waveFullPath = Path.Combine(tjaDir, tja.WaveFileName);
 
-            lyric = new Lyric(tja.GetLyricFilePath(tjaDir), tja.Scores[0].LyricList);
+            lyric = new Lyric(tja.GetLyricFilePath(tjaDir), selectedScore.LyricList);
 
             bgm = LoadSoundMem(waveFullPath);
 
@@ -122,7 +139,7 @@ namespace Tatelier.Mini.Scene
                 song = new EmptySong(total);
             }
 
-            song.CurrentTime = (tja.Scores[0].OffsetMillisec);
+            song.CurrentTime = (selectedScore.OffsetMillisec);
 
             song.CurrentTime = StartOffset;
 
@@ -133,7 +150,7 @@ namespace Tatelier.Mini.Scene
 
 		void UpdateAuto()
 		{
-			nowMillisec = song.CurrentTime + tja.Scores[0].OffsetMillisec;
+			nowMillisec = song.CurrentTime + players[0].Score.OffsetMillisec;
 
 			int diffTime = 0;
 
@@ -287,7 +304,7 @@ namespace Tatelier.Mini.Scene
                 player.TaikoSEControl.Play(TaikoSEType.Kat);
             }
 
-            nowMillisec = song.CurrentTime + tja.Scores[0].OffsetMillisec;
+            nowMillisec = song.CurrentTime + players[0].Score.OffsetMillisec;
 
 			INote nearNote = null;
 			JudgeType judgeType = JudgeType.None;
