@@ -150,22 +150,15 @@ namespace Tatelier.Mini.Play
 
 										float x;
 
-										if (diffTime < 0
-											&& !reFirstDrawDataItem.IsDelay)
-										{
-											x = target.JudgeFramePoint.CX + (diffTime * note.MovementPerMillisec);
-										}
-										else
+										// 判定ライン通過後も含め、常にHBSCROLLチェーン(区間ごとのper計算)で位置を求める。
+										// 通過後専用の簡易式(経過時間×自身の速さ)は、#DELAYなどでスクロールが
+										// 一時停止した後に不連続なジャンプを起こすため使用しない。
 										{
 											double hbscrollPivotX = reFirstDrawDataItem.GetHBScrollPivotX(per);
 											x = (float)(target.JudgeFramePoint.CX + (note.HBScrollStartPointX - hbscrollPivotX) * note.ScrollSpeedInfo.Value * target.PlayOptionScrollSpeed);
 										}
 
 										if (target.FinishDrawPointX < x && x < target.StartDrawPointX)
-										
-										
-										
-										
 										{
 											DrawRotaGraphFastF(x, y, 1.0F, 0.0F, handle, DX_TRUE);
 										}
@@ -175,14 +168,18 @@ namespace Tatelier.Mini.Play
 									{
 										int handle = target.NoteImageControl.GetImageHandle(note.NoteType);
 										float x;
-										if (diffTime < 0
+										var finishDiffMillisec = (note.FinishMillisec - nowTime);
+
+										if (diffTime < 0 && finishDiffMillisec >= 0
 											&& !reFirstDrawDataItem.IsDelay)
 										{
-											var finishDiffMillisec = (note.FinishMillisec - nowTime);
-											x = finishDiffMillisec < 0 ? target.JudgeFramePoint.CX + (finishDiffMillisec * note.MovementPerMillisec) : target.JudgeFramePoint.CX;
+											// 打っている(判定受付時間内)間は判定ラインに固定する
+											x = target.JudgeFramePoint.CX;
 										}
 										else
 										{
+											// 判定受付が終わった後は、他のノーツ種別と同様にHBSCROLLチェーンで
+											// 位置を求める(理由はDon/Kat側のコメント参照)
 											double hbscrollPivotX = reFirstDrawDataItem.GetHBScrollPivotX(per);
 											x = (float)(target.JudgeFramePoint.CX + (note.HBScrollStartPointX - hbscrollPivotX) * note.ScrollSpeedInfo.Value * target.PlayOptionScrollSpeed);
 										}
@@ -206,34 +203,35 @@ namespace Tatelier.Mini.Play
 
 													float hHalf = h / 2;
 													float x;
-													float prevT;
 													float prevX;
 
-													if (diffTime < 0
-														&& !reFirstDrawDataItem.IsDelay)
-													{
-														x = target.JudgeFramePoint.CX + (diffTime * note.MovementPerMillisec);
-
-														prevT = (note.PrevNote.StartMillisec - nowTime);
-														prevX = target.JudgeFramePoint.CX + (prevT * note.PrevNote.MovementPerMillisec);
-													}
-													else
+													// 常にHBSCROLLチェーンで位置を求める(理由はDon/Kat側のコメント参照)。
+													// ロール本体の始点(prevX)・終点(x)ともに同じ考え方で統一する。
 													{
 														double hbscrollPivotX = reFirstDrawDataItem.GetHBScrollPivotX(per);
 														x = (float)(target.JudgeFramePoint.CX + (note.HBScrollStartPointX - hbscrollPivotX) * note.ScrollSpeedInfo.Value * target.PlayOptionScrollSpeed);
-
-														prevT = (note.PrevNote.StartMillisec - nowTime);
-														if (prevT < 0)
-														{
-															prevX = target.JudgeFramePoint.CX + (prevT * note.PrevNote.MovementPerMillisec);
-														}
-														else
-														{
-															prevX = (float)(target.JudgeFramePoint.CX + (note.PrevNote.HBScrollStartPointX - hbscrollPivotX) * note.PrevNote.ScrollSpeedInfo.Value * target.PlayOptionScrollSpeed);
-														}
+														prevX = (float)(target.JudgeFramePoint.CX + (note.PrevNote.HBScrollStartPointX - hbscrollPivotX) * note.PrevNote.ScrollSpeedInfo.Value * target.PlayOptionScrollSpeed);
 													}
-													DrawModiGraphF(prevX - 1, y - hHalf, x + 1, y - hHalf, x + 1, y + hHalf, prevX - 1, y + hHalf, handle, DX_TRUE);
-													DrawRotaGraphFastF(x, y, 1.0F, 0.0F, target.NoteImageControl.GetEndNoteImageHandle(note.PrevNote.NoteType), DX_TRUE, note.ScrollSpeedInfo.Value < 0 ? 1 : 0);
+
+													// 他の音符種別と違い、この連打本体の描画だけ画面内判定が抜けていた。
+													// マイナスBPM/マイナス小節/マイナスDELAYを多用するような譜面だと、
+													// prevX・xのHBSCROLL位置計算が破綻して画面外はるか遠くの値に
+													// なることがあり、その場合ここだけ画面いっぱいに帯が
+													// 引き伸ばされて描画されてしまっていた。
+													// 通常のスクロールイン/アウトは妨げないよう、区間が描画範囲と
+													// 重なっているかで判定しつつ、明らかに異常な幅(画面の何倍もの
+													// 幅)になっている場合は描画をスキップする。
+													float rollLeft = Math.Min(prevX, x);
+													float rollRight = Math.Max(prevX, x);
+													float maxSaneWidth = (target.StartDrawPointX - target.FinishDrawPointX) * 4;
+
+													if (target.FinishDrawPointX < rollRight
+														&& rollLeft < target.StartDrawPointX
+														&& (rollRight - rollLeft) < maxSaneWidth)
+													{
+														DrawModiGraphF(prevX - 1, y - hHalf, x + 1, y - hHalf, x + 1, y + hHalf, prevX - 1, y + hHalf, handle, DX_TRUE);
+														DrawRotaGraphFastF(x, y, 1.0F, 0.0F, target.NoteImageControl.GetEndNoteImageHandle(note.PrevNote.NoteType), DX_TRUE, note.ScrollSpeedInfo.Value < 0 ? 1 : 0);
+													}
 												}
 												break;
 										}
@@ -261,15 +259,11 @@ namespace Tatelier.Mini.Play
 				firstDrawDataItem = bscore.HBScrollDrawDataControl.ItemList.LastOrDefault(v => v.IsApplicable(0));
 			}
 
-			int diffTime;
-
 			// レイヤー層
 			foreach (var item in bscore.Measures)
 			{
 				if (item.Visible)
 				{
-					diffTime = item.StartMillisec - nowTime;
-
 					var reFirstDrawDataItem = firstDrawDataItem;
 
 					// 音符がfirstDrawDataItemの時間範囲内の場合は、その音符の時間範囲内のデータで再構築する
@@ -286,12 +280,7 @@ namespace Tatelier.Mini.Play
 
 					per = reFirstDrawDataItem.GetElapsedRate(nowTime);
 
-					if (diffTime < 0
-						&& !reFirstDrawDataItem.IsDelay)
-					{
-						x = target.JudgeFramePoint.CX + (diffTime * item.MovementPerMillisec);
-					}
-					else
+					// 常にHBSCROLLチェーンで位置を求める(理由はDrawNoteBranchScore側のコメント参照)
 					{
 						double hbscrollPivotX = reFirstDrawDataItem.GetHBScrollPivotX(per);
 						x = (float)(target.JudgeFramePoint.CX + (item.HBScrollStartPointX - hbscrollPivotX) * item.ScrollSpeedInfo.Value * target.PlayOptionScrollSpeed);
