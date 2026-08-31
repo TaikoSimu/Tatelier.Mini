@@ -105,6 +105,38 @@
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
+    <!--
+      以下は実行に必須だが、これまで出力フォルダへ手動でコピーされていた
+      アセット・設定ファイル一式。CopyToOutputDirectory を使い、ビルド時に
+      自動配置されるようにする。
+    -->
+    <None Include="img\**\*.*">
+      <Link>img\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="snd\**\*.*">
+      <Link>snd\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="lang\**\*.*">
+      <Link>lang\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="sample\**\*.*">
+      <Link>sample\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="keyconf.ini">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="readme.html">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="rms.css">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\tatelier-score\src\Tatelier.Score\Tatelier.Score.csproj">
       <Project>{d97aa506-288b-424c-aa22-61ef4c7728d3}</Project>
       <Name>Tatelier.Score</Name>
