@@ -10,10 +10,19 @@ namespace Tatelier.Mini
 	/// TJAファイルを安全に読み込むためのヘルパー。
 	///
 	/// Tatelier.Score.dll側のTJAパーサーには、
-	/// 「#コマンドの直後に空白・改行を挟まず // コメントが続く」場合、
-	/// コメント終端の改行がバッファに残らず、後続の音符データが
-	/// まるごとコマンドの一部として消えてしまう(＝その小節が
-	/// 音符ゼロの休み小節として扱われる)既知の不具合がある。
+	/// 「#コマンド行の途中(引数の有無や直前の空白の有無を問わず)に
+	/// // コメントが続く」場合、コメント終端の改行がmeasureSBバッファに
+	/// 残らず、コメント直前までの内容と次の行がそのまま連結されてしまう
+	/// 既知の不具合がある(Score.cs の isIgnore 処理が "//" 検出後、
+	/// 次の '\n' も含めて丸ごと読み飛ばしてしまうため)。
+	///
+	/// 例えば
+	///   #DELAY 0.001 ////BLA
+	///   #BPMCHANGE -120
+	/// のような並びは、"#BPMCHANGE -120" 行が丸ごと直前の #DELAY コマンドの
+	/// 引数の一部として飲み込まれてしまい、BPMCHANGEが一切適用されない
+	/// (＝直前のBPM/MEASUREの組み合わせのまま音符送りが計算され、
+	/// 極端な場合は再生時刻が巨大な値に吹き飛ぶ)という形で症状が出る。
 	///
 	/// 元のtjaファイル自体には一切手を加えず、読み込み直前にだけ
 	/// 一時キャッシュへ改行を補ったコピーを作成し、そちらのパスを
@@ -23,8 +32,10 @@ namespace Tatelier.Mini
 	/// </summary>
 	static class TJASafeLoader
 	{
-		// 例: "#GOGOSTART//42" のように、#コマンドの直後に空白なしで "//" が続くパターン
-		static readonly Regex DangerousCommentPattern = new Regex(@"(#[A-Za-z]+)(//)", RegexOptions.Compiled);
+		// 例: "#GOGOSTART//42" や "#DELAY 0.001 ////BLA" のように、
+		// #コマンド行の中に(直後・引数の後どちらでも) "//" が現れるパターンを
+		// 同一行内で(改行を跨がずに)検出する。
+		static readonly Regex DangerousCommentPattern = new Regex(@"(#[A-Za-z]+[^\r\n]*?)(//)", RegexOptions.Compiled);
 
 		static readonly string CacheDirectory = Path.Combine(Path.GetTempPath(), "Tatelier.Mini", "TJASafeCache");
 

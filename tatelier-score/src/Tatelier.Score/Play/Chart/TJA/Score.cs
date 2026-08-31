@@ -764,6 +764,10 @@ namespace Tatelier.Score.Play.Chart.TJA
 						IsDelay = bpmInfo.IsDelay,
 					};
 
+					// HBSCROLLは本来、区間の実時間経過(× BPM)ではなく、譜面の拍子構造
+					// (StartHBScrollUnit/FinishHBScrollUnit等ではなく、この実装では
+					// 実時間差×BPMの積み上げ)で進み方が決まる。この積み上げ方式自体は
+					// 参照実装(taikojiro283本家)とも一致しているため変更しない。
 					dataItem.StartPoint = branchScore.HBScrollDrawDataControl.ItemList?.LastOrDefault()?.FinishPoint ?? bpmInfo.GetDivision(dataItem.StartMillisec) * areaWidth;
 					dataItem.FinishPoint = dataItem.StartPoint + bpmInfo.GetDivision(dataItem.FinishMillisec - dataItem.StartMillisec) * areaWidth;
 
@@ -772,40 +776,70 @@ namespace Tatelier.Score.Play.Chart.TJA
 				}
 
 				// 2周目: 各ノーツ・小節線の座標を計算する。
-				// マイナスBPM/マイナス小節が絡む譜面では、音符が本来属するBPM区間
-				// (dataItem)の時間範囲に、その音符自身のStartMillisecが実際には
-				// 含まれていないケースがある。そのまま計算すると0～1の範囲を外れた
-				// perが0/1にクランプされ、本来離れているはずの音符同士が同じ座標に
-				// 潰れてしまう(例: 連打の開始・終了ノーツが同座標になり胴体が
-				// 伸びなくなる)。IsApplicable()（マイナスBPM区間でも安全に判定できる、
-				// 描画側で既に使われているのと同じ判定）で実際に該当する区間を
-				// 探し直すことでこれを回避する。見つからない場合のみ、従来通り
-				// 割り当て区間をそのまま使う(クランプはフォールバックとして残す)。
+				// 「本来属するBPM区間」の基準は、note.BPMInfo/measure.BPMInfo(生成時点で
+				// 直接参照を持ち、以後変わらない)を使う。以前はBranchScore.Build()が
+				// NoteList/MeasureLineListへ振り分けた結果(実時間の範囲だけで判定)を基準に
+				// していたが、マイナスBPM/マイナス小節を伴う譜面では実時間の範囲が
+				// 重複することがあり、本来とは全く無関係な(はるか離れた)BPM区間の
+				// NoteListへ誤って振り分けられるケースがあった。その場合、誤った区間の
+				// IsApplicable()もたまたま真になってしまうため、後段のフォールバック探索も
+				// 働かず、無関係な音符同士が同じ座標に重なって描画されてしまっていた
+				// (連打の胴体が縮む/伸びない症状もこの一種)。
+				// note.BPMInfoは常に正しいため、これを主として使い、それでも
+				// IsApplicable()が偽の場合(マイナスBPM区間でStartMillisecが区間外に
+				// なるケース)のみ、GetNarrowestApplicable()で実際に該当する区間を
+				// 探し直すフォールバックへ回す。
+				var bpmToDataItem = new Dictionary<BPM, HBScrollDrawDataItem>();
 				foreach (var (bpmInfo, dataItem) in pending)
 				{
-					foreach (var note in bpmInfo.NoteList)
+					if (!bpmToDataItem.ContainsKey(bpmInfo))
 					{
-						var actualItem = dataItem.IsApplicable(note.StartMillisec)
-							? dataItem
-							: branchScore.HBScrollDrawDataControl.ItemList.LastOrDefault(v => v.IsApplicable(note.StartMillisec)) ?? dataItem;
+						bpmToDataItem[bpmInfo] = dataItem;
+					}
+				}
 
-						double per = actualItem.GetElapsedRate(note.StartMillisec);
-						per = Math.Max(0, Math.Min(1, per));
-						note.HBScrollStartPointX = actualItem.GetHBScrollPivotX(per);
-						note.HBScrollDrawDataItem = actualItem;
+				foreach (var note in branchScore.Notes)
+				{
+					HBScrollDrawDataItem naturalItem = null;
+					if (note.BPMInfo != null)
+					{
+						bpmToDataItem.TryGetValue(note.BPMInfo, out naturalItem);
 					}
 
-					foreach (var measure in bpmInfo.MeasureLineList)
+					var actualItem = (naturalItem != null && naturalItem.IsApplicable(note.StartMillisec))
+						? naturalItem
+						: branchScore.HBScrollDrawDataControl.GetNarrowestApplicable(note.StartMillisec) ?? naturalItem;
+					if (actualItem == null)
 					{
-						var actualItem = dataItem.IsApplicable(measure.StartMillisec)
-							? dataItem
-							: branchScore.HBScrollDrawDataControl.ItemList.LastOrDefault(v => v.IsApplicable(measure.StartMillisec)) ?? dataItem;
-
-						double per = actualItem.GetElapsedRate(measure.StartMillisec);
-						per = Math.Max(0, Math.Min(1, per));
-						measure.HBScrollStartPointX = actualItem.GetHBScrollPivotX(per);
-						measure.HBScrollDrawDataItem = actualItem;
+						continue;
 					}
+
+					double per = actualItem.GetElapsedRate(note.StartMillisec);
+					per = Math.Max(0, Math.Min(1, per));
+					note.HBScrollStartPointX = actualItem.GetHBScrollPivotX(per);
+					note.HBScrollDrawDataItem = actualItem;
+				}
+
+				foreach (var measure in branchScore.Measures)
+				{
+					HBScrollDrawDataItem naturalItem = null;
+					if (measure.BPMInfo != null)
+					{
+						bpmToDataItem.TryGetValue(measure.BPMInfo, out naturalItem);
+					}
+
+					var actualItem = (naturalItem != null && naturalItem.IsApplicable(measure.StartMillisec))
+						? naturalItem
+						: branchScore.HBScrollDrawDataControl.GetNarrowestApplicable(measure.StartMillisec) ?? naturalItem;
+					if (actualItem == null)
+					{
+						continue;
+					}
+
+					double per = actualItem.GetElapsedRate(measure.StartMillisec);
+					per = Math.Max(0, Math.Min(1, per));
+					measure.HBScrollStartPointX = actualItem.GetHBScrollPivotX(per);
+					measure.HBScrollDrawDataItem = actualItem;
 				}
 			}
 		}
