@@ -96,14 +96,12 @@ namespace Tatelier.Mini.Play
 		}
 		void IScoreRenderer.DrawNoteBranchScore(BranchScore bscore, int nowTime)
 		{
-			var firstDrawDataItem = bscore.HBScrollDrawDataControl.ItemList.LastOrDefault(
-				v => v.IsApplicable(nowTime));
+			var firstDrawDataItem = bscore.HBScrollDrawDataControl.GetNarrowestApplicable(nowTime);
 
 			if (firstDrawDataItem == null
 				&& nowTime < 0)
 			{
-				firstDrawDataItem = bscore.HBScrollDrawDataControl.ItemList.LastOrDefault(
-				v => v.IsApplicable(0));
+				firstDrawDataItem = bscore.HBScrollDrawDataControl.GetNarrowestApplicable(0);
 			}
 
 			System.Diagnostics.Trace.WriteLine($"{(firstDrawDataItem != null ? $"Start:{firstDrawDataItem.StartMillisec}, Finish:{firstDrawDataItem.FinishMillisec}" : "null")}");
@@ -258,12 +256,12 @@ namespace Tatelier.Mini.Play
 			float x;
 			float y = target.JudgeFramePoint.CY;
 
-			var firstDrawDataItem = bscore.HBScrollDrawDataControl.ItemList.LastOrDefault(v => v.IsApplicable(nowTime));
+			var firstDrawDataItem = bscore.HBScrollDrawDataControl.GetNarrowestApplicable(nowTime);
 
 			if (firstDrawDataItem == null
 				&& nowTime < 0)
 			{
-				firstDrawDataItem = bscore.HBScrollDrawDataControl.ItemList.LastOrDefault(v => v.IsApplicable(0));
+				firstDrawDataItem = bscore.HBScrollDrawDataControl.GetNarrowestApplicable(0);
 			}
 
 			// レイヤー層
