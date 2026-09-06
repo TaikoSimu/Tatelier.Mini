@@ -16,7 +16,38 @@ namespace Tatelier.Mini.Play
 	{
 		bool disposed = true;
 
+		const int CellWidth = 48;
+
 		int[] handles;
+
+		/// <summary>
+		/// notes.png内の1セルを画面へ描画すべきサイズへ拡大するための倍率を取得する。
+		/// </summary>
+		/// <remarks>
+		/// OpenTatelier本家は旧個別画像(128px/196px)との互換のため倍率補正が
+		/// 必要だったが、Miniはnotes.pngのセルサイズ(48px)をそのまま等倍で
+		/// 使う設計であり、そのままで正しい見た目になる。OpenTatelier側の
+		/// 描画コード(HBScrollScoreRenderer.cs/NormalScoreRenderer.cs)を
+		/// そのまま移植した際にこのメソッドの呼び出しだけ残るため、
+		/// Miniでは常に1.0倍を返すダミー実装として用意している。
+		/// </remarks>
+		public static float GetScale(NoteType noteType)
+		{
+			return 1.0f;
+		}
+
+		/// <summary>
+		/// 指定した音符種別を描画するときの、1セル分(48px)が画面上で占める幅(px)を取得する。
+		/// </summary>
+		/// <remarks>
+		/// 風船音符は notes.png 上で「表(丸)」と「裏(尾)」の2セルに分かれており、
+		/// 元は1枚の絵だったものを隣接させて再現する必要がある。そのときに
+		/// 表側の隣へ裏側をどれだけずらして描画すればよいかを求めるのに使う。
+		/// </remarks>
+		public static float GetScaledCellWidth(NoteType noteType)
+		{
+			return CellWidth * GetScale(noteType);
+		}
 
 		/// <summary>
 		/// 音符画像ハンドルを取得する
