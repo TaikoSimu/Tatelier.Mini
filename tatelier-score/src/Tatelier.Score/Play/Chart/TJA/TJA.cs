@@ -104,6 +104,31 @@ namespace Tatelier.Score.Play.Chart.TJA
 		public IReadOnlyList<Score> Scores;
 
 		/// <summary>
+		/// TJA内のファイル名参照(WAVE:/LYRIC:)を安全化する。
+		/// 絶対パスやUNCパス(\\server\share\...)、".."を含む値をそのまま
+		/// Path.Combineに渡すと、譜面フォルダ外の任意のローカルファイルを
+		/// 読み込んだり、攻撃者が用意したUNCパスへアクセスして資格情報が
+		/// 漏えいする(SMB経由の意図しないNTLM認証の送信)おそれがあるため、
+		/// そのような値はファイル名部分だけを残して無害化する。
+		/// 通常の「同じフォルダ(またはそのサブフォルダ)内のファイル名」
+		/// 指定はそのまま通す。
+		/// </summary>
+		static string SanitizeRelativeFilePath(string value)
+		{
+			if (string.IsNullOrEmpty(value))
+			{
+				return value;
+			}
+
+			if (Path.IsPathRooted(value) || value.Split('\\', '/').Any(s => s == ".."))
+			{
+				return Path.GetFileName(value);
+			}
+
+			return value;
+		}
+
+		/// <summary>
 		/// 歌詞ファイルパスを取得する。
 		/// </summary>
 		/// <param name="dir">ディレクトリパス</param>
@@ -269,14 +294,14 @@ namespace Tatelier.Score.Play.Chart.TJA
 											Id = groups[2].Value;
 											break;
 										case "LYRIC:":
-											LyricFileName = groups[2].Value;
+											LyricFileName = SanitizeRelativeFilePath(groups[2].Value);
 											break;
 										case "TITLE":
 										case "SUBTITlE":
 											Title = groups[2].Value;
 											break;
 										case "WAVE":
-											WaveFileName = groups[2].Value;
+											WaveFileName = SanitizeRelativeFilePath(groups[2].Value);
 											break;
 										case "OFFSET":
 											OffsetMillisec = double.Parse(groups[2].Value);
