@@ -215,6 +215,7 @@ namespace Tatelier.Score.Play.Chart.TJA
 
 					bool nowReadScore = false;
 					bool hasHBScroll = false;
+					bool hasBMScroll = false;
 					int[] ballonCountArray = new int[0];
 
 					while (!sr.EndOfStream)
@@ -229,6 +230,10 @@ namespace Tatelier.Score.Play.Chart.TJA
 							if (line.StartsWith("#HBSCROLL"))
 							{
 								hasHBScroll = true;
+							}
+							else if (line.StartsWith("#BMSCROLL"))
+							{
+								hasBMScroll = true;
 							}
 							else if (line.StartsWith("#START"))
 							{
@@ -253,6 +258,7 @@ namespace Tatelier.Score.Play.Chart.TJA
 										StartBPM = StartBPM,
 										OffsetMillisec = OffsetMillisec,
 										HasHBScroll = hasHBScroll,
+										HasBMScroll = hasBMScroll,
 										BalloonCountList = ballonCountArray,
 										IsNoteInverse = s.IsNoteInverse,
 										IsNoteRandom = s.IsNoteRandom,
@@ -262,6 +268,7 @@ namespace Tatelier.Score.Play.Chart.TJA
 								}
 								sb.Clear();
 								hasHBScroll = false;
+								hasBMScroll = false;
 							}
 							else
 							{
@@ -335,6 +342,7 @@ namespace Tatelier.Score.Play.Chart.TJA
 							StartBPM = StartBPM,
 							OffsetMillisec = OffsetMillisec,
 							HasHBScroll = hasHBScroll,
+							HasBMScroll = hasBMScroll,
 							BalloonCountList = ballonCountArray,
 							IsNoteInverse = s.IsNoteInverse,
 							IsNoteRandom = s.IsNoteRandom,

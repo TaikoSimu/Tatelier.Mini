@@ -37,6 +37,11 @@ namespace Tatelier.Score.Component.NoteSystem
         HBScrollDrawDataItem HBScrollDrawDataItem { get; set; }
 
         /// <summary>
+        /// HBSCROLL用の時刻(ms)。太鼓さん次郎と同じ方法で求めたもの(TaikojiroTime参照)
+        /// </summary>
+        int HBScrollMillisec { get; set; }
+
+        /// <summary>
         /// 1msで動く座標量
         /// </summary>
         float MovementPerMillisec { get; set; }

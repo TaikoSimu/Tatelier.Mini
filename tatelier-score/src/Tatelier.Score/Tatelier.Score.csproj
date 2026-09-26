@@ -77,6 +77,7 @@
     <Compile Include="Play\Chart\GogoItem.cs" />
     <Compile Include="Play\Chart\HBScrollDrawDataControl.cs" />
     <Compile Include="Play\Chart\HBScrollDrawDataItem.cs" />
+    <Compile Include="Play\Chart\TaikojiroTime.cs" />
     <Compile Include="Play\Chart\INoteSystem.cs" />
     <Compile Include="Play\Chart\LyricItem.cs" />
     <Compile Include="Play\Chart\NotePivotInfo.cs" />
