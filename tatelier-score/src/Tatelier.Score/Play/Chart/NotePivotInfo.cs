@@ -128,6 +128,22 @@ namespace Tatelier.Score.Play.Chart
 		public NoteTextType? PendingNoteTextTypeOverride = null;
 
 		/// <summary>
+		/// HBSCROLL用の時刻(太鼓さん次郎と同じ方法で求める)
+		/// </summary>
+		public TaikojiroTime Tj = new TaikojiroTime();
+
+		/// <summary>
+		/// 音符等の時刻にHBSCROLL用の時刻(太鼓さん次郎と同じ方法で求めたもの)を使うかどうか。
+		/// 太鼓さん次郎は表示も判定もこの時刻で行うため、HBSCROLL譜面ではこちらに合わせる。
+		/// </summary>
+		public bool UseTaikojiroTime = false;
+
+		/// <summary>
+		/// 音符等の時刻(ms)
+		/// </summary>
+		public int NoteMillisec => UseTaikojiroTime ? Tj.Now : (int)PivotMillisec;
+
+		/// <summary>
 		/// コンストラクタ
 		/// </summary>
 		public NotePivotInfo() { }

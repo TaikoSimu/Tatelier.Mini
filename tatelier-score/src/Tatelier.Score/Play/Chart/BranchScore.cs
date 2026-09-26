@@ -17,6 +17,11 @@ namespace Tatelier.Score.Play.Chart
 		public List<Measure> MeasureList = new List<Measure>();
 		public List<ScrollSpeed> ScrollSpeedList = new List<ScrollSpeed>();
 
+		/// <summary>
+		/// HBSCROLL用の#DELAYのリスト(開始時刻・長さは太鼓さん次郎と同じ方法で求めたもの)
+		/// </summary>
+		public List<(int StartMillisec, int Duration)> HBScrollDelayList = new List<(int StartMillisec, int Duration)>();
+
 		readonly SortedDictionary<int, List<List<INote>>> noteList;
 
 		public HBScrollDrawDataControl HBScrollDrawDataControl = new HBScrollDrawDataControl();

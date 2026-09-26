@@ -33,6 +33,11 @@ namespace Tatelier.Score.Component
         public bool IsDelay { get; set; } = false;
 
         /// <summary>
+        /// HBSCROLL用の開始時間(ms)。太鼓さん次郎と同じ方法で求めたもの(TaikojiroTime参照)
+        /// </summary>
+        public int HBScrollStartMillisec { get; set; } = 0;
+
+        /// <summary>
         /// 1小節の時間(ms)
         /// </summary>
         public double OneMeasureMillisec { get; private set; }

@@ -58,6 +58,7 @@ namespace Tatelier.Mini.Play
 	/// <remarks>
 	/// OpenTatelier本体のHBScrollScoreRenderer.csをそのまま移植したもの
 	/// (見た目・挙動をOpenTatelierと完全に一致させるため)。
+	/// 音符・小節線の座標計算は太鼓さん次郎(ver2.92)と同じ式(HBScrollDrawDataControl参照)。
 	/// MainConfig.Singleton.Debugによるデバッグ用ID表示だけは、Miniに
 	/// MainConfigクラス自体が存在しないため省いてある。
 	/// </remarks>
@@ -68,56 +69,29 @@ namespace Tatelier.Mini.Play
 
 		public bool IsNoteHide { get; set; }
 
-		HBScrollDrawDataItem[] b = new HBScrollDrawDataItem[2];
-
-		void a(IReadOnlyList<HBScrollDrawDataItem> itemList, int nowTime, HBScrollDrawDataItem[] result)
+		/// <summary>
+		/// 指定時刻の音符等の画面X座標を求める
+		/// </summary>
+		float GetX(HBScrollDrawDataControl control, HBScrollCamera camera, int millisec, HBScrollDrawDataItem item, double scrollSpeed)
 		{
-			for (int i = 0; i < b.Length; i++)
-			{
-				b[i] = null;
-			}
-
-			int index = 0;
-			for (int i = itemList.Count - 1; i >= 0; i--)
-			{
-				var v = itemList[i];
-				if (index == 0)
-				{
-					if (v.StartMillisec <= nowTime
-						&& nowTime < v.FinishMillisec)
-					{
-						result[index] = v;
-						index++;
-						if (index >= result.Length)
-						{
-							return;
-						}
-					}
-				}
-				else
-				{
-					if (index >= result.Length)
-					{
-						return;
-					}
-				}
-			}
+			int distance = control.GetDistance(millisec, item, camera, control.GetScrollSpeed(scrollSpeed) * target.PlayOptionScrollSpeed);
+			return target.JudgeFramePoint.CX + distance;
 		}
+
+		static float Clamp(float value, float min, float max)
+		{
+			return Math.Max(min, Math.Min(max, value));
+		}
+
 		void IScoreRenderer.DrawNoteBranchScore(BranchScore bscore, int nowTime)
 		{
-			var firstDrawDataItem = bscore.HBScrollDrawDataControl.ItemList.LastOrDefault(
-				v => v.IsApplicable(nowTime));
-
-			if (firstDrawDataItem == null
-				&& nowTime < 0)
+			var control = bscore.HBScrollDrawDataControl;
+			if (control.ItemList.Count == 0)
 			{
-				firstDrawDataItem = bscore.HBScrollDrawDataControl.ItemList.LastOrDefault(
-				v => v.IsApplicable(0));
+				return;
 			}
 
-			System.Diagnostics.Trace.WriteLine($"{(firstDrawDataItem != null ? $"Start:{firstDrawDataItem.StartMillisec}, Finish:{firstDrawDataItem.FinishMillisec}" : "null")}");
-
-			double per = 0;
+			var camera = control.GetCamera(nowTime);
 
 			// レイヤー層
 			foreach (var layer in bscore.NoteList)
@@ -128,188 +102,144 @@ namespace Tatelier.Mini.Play
 					// 音符層
 					foreach (var note in section.Reverse())
 					{
-						if (note.Visible)
+						if (!note.Visible)
 						{
-							var reFirstDrawDataItem = firstDrawDataItem;
+							continue;
+						}
 
-							// 音符がfirstDrawDataItemの時間範囲内の場合は、その音符の時間範囲内のデータで再構築する
-							if ((reFirstDrawDataItem == null)
-								|| (!reFirstDrawDataItem.IsDelay && reFirstDrawDataItem.IsApplicable(note)))
-							{
-								reFirstDrawDataItem = note.HBScrollDrawDataItem;
-								//reFirstDrawDataItem = bscore.HBScrollDrawDataControl.ItemList.LastOrDefault(
-								//	v => v.StartMillisec <= note.StartMillisec
-								//	&& note.FinishMillisec < v.EndMillisec);
+						float y = target.JudgeFramePoint.CY;
 
-								if (reFirstDrawDataItem == null)
+						switch (note.NoteType)
+						{
+							case NoteType.Don:
+							case NoteType.Kat:
+							case NoteType.DonBig:
+							case NoteType.KatBig:
+							case NoteType.Roll:
+							case NoteType.RollBig:
 								{
-									continue;
+									int handle = target.NoteImageControl.GetImageHandle(note.NoteType);
+
+									float x = GetX(control, camera, note.HBScrollMillisec, note.HBScrollDrawDataItem, note.ScrollSpeedInfo.Value);
+
+									if (target.FinishDrawPointX < x && x < target.StartDrawPointX)
+									{
+										if (!IsNoteHide)
+										{
+											DrawRotaGraphFastF(x, y, NoteImageControl.GetScale(note.NoteType), 0.0F, handle, DX_TRUE);
+										}
+										using (DrawAreaGuard.Create())
+										{
+											target.NoteText.Draw(x, y, note.NoteTextType);
+										}
+									}
 								}
-							}
-
-							per = reFirstDrawDataItem.GetElapsedRate(nowTime);
-							int diffTime = note.StartMillisec - nowTime;
-							float y = target.JudgeFramePoint.CY;
-
-							switch (note.NoteType)
-							{
-								case NoteType.Don:
-								case NoteType.Kat:
-								case NoteType.DonBig:
-								case NoteType.KatBig:
-								case NoteType.Roll:
-								case NoteType.RollBig:
+								break;
+							case NoteType.Balloon:
+								{
+									int handle = target.NoteImageControl.GetImageHandle(note.NoteType);
+									float x;
+									if (note.StartMillisec <= nowTime
+										&& nowTime < note.FinishMillisec)
 									{
-										int handle = target.NoteImageControl.GetImageHandle(note.NoteType);
+										// 風船を叩いている間は判定枠に留まる
+										x = target.JudgeFramePoint.CX;
+									}
+									else if (note.FinishMillisec <= nowTime)
+									{
+										x = GetX(control, camera, note.HBScrollMillisec + (note.FinishMillisec - note.StartMillisec), null, note.ScrollSpeedInfo.Value);
+									}
+									else
+									{
+										x = GetX(control, camera, note.HBScrollMillisec, note.HBScrollDrawDataItem, note.ScrollSpeedInfo.Value);
+									}
 
-										float x;
+									if (target.FinishDrawPointX < x && x < target.StartDrawPointX)
+									{
+										if (!IsNoteHide)
+										{
+											float scale = NoteImageControl.GetScale(note.NoteType);
 
-										if (diffTime < 0
-											&& !reFirstDrawDataItem.IsDelay)
-										{
-											x = target.JudgeFramePoint.CX + (diffTime * note.MovementPerMillisec);
-										}
-										else
-										{
-											double hbscrollPivotX = reFirstDrawDataItem.GetHBScrollPivotX(per);
-											x = (float)(target.JudgeFramePoint.CX + (note.HBScrollStartPointX - hbscrollPivotX) * note.ScrollSpeedInfo.Value * target.PlayOptionScrollSpeed);
-										}
-
-										if (target.FinishDrawPointX < x && x < target.StartDrawPointX)
-										{
-											if (!IsNoteHide)
+											// 表(丸)・裏(尾)の境界がバイリニア補間で滲んで隙間や線に
+											// 見えないよう、連打胴体の描画と同様にニアレストネイバーで
+											// 描画する。
+											using (DrawModeGuard.Create())
 											{
-												DrawRotaGraphFastF(x, y, NoteImageControl.GetScale(note.NoteType), 0.0F, handle, DX_TRUE);
+												SetDrawMode(DX_DRAWMODE_NEAREST);
+
+												DrawRotaGraphFastF(x, y, scale, 0.0F, handle, DX_TRUE);
+
+												// 風船の「うしろ(尾)」を表(丸)のすぐ後方(スクロール方向の
+												// 後ろ)に並べて描画する。notes.pngでは風船の絵が48px1セルに
+												// 収まらず表(丸)・裏(尾)の2セルに分かれているため、隣接させ
+												// ないと元の1枚絵にならず尾が描画されない。
+												int backHandle = target.NoteImageControl.GetEndNoteImageHandle(note.NoteType);
+												if (backHandle != -1)
+												{
+													DrawRotaGraphFastF(x + NoteImageControl.GetScaledCellWidth(note.NoteType), y, scale, 0.0F, backHandle, DX_TRUE);
+												}
 											}
-											using (DrawAreaGuard.Create())
-											{
-												target.NoteText.Draw(x, y, note.NoteTextType);
-											}
+										}
+
+										using (DrawAreaGuard.Create())
+										{
+											target.NoteText.Draw(x, y, note.NoteTextType);
 										}
 									}
-									break;
-								case NoteType.Balloon:
+								}
+								break;
+							case NoteType.End:
+								{
+									// 前回音符によって処理を変える
+									switch (note.PrevNote.NoteType)
 									{
-										int handle = target.NoteImageControl.GetImageHandle(note.NoteType);
-										float x;
-										if (diffTime < 0
-											&& !reFirstDrawDataItem.IsDelay)
-										{
-											var finishDiffMillisec = (note.FinishMillisec - nowTime);
-											x = finishDiffMillisec < 0 ? target.JudgeFramePoint.CX + (finishDiffMillisec * note.MovementPerMillisec) : target.JudgeFramePoint.CX;
-										}
-										else
-										{
-											double hbscrollPivotX = reFirstDrawDataItem.GetHBScrollPivotX(per);
-											x = (float)(target.JudgeFramePoint.CX + (note.HBScrollStartPointX - hbscrollPivotX) * note.ScrollSpeedInfo.Value * target.PlayOptionScrollSpeed);
-										}
-
-										if (target.FinishDrawPointX < x && x < target.StartDrawPointX)
-										{
-											if (!IsNoteHide)
+										case NoteType.Roll:
+										case NoteType.RollBig:
 											{
-												float scale = NoteImageControl.GetScale(note.NoteType);
+												int handle = target.NoteImageControl.GetContentNoteImageHandle(note.PrevNote.NoteType);
+												GetGraphSizeF(handle, out float w, out float h);
+												float rollScale = NoteImageControl.GetScale(note.PrevNote.NoteType);
 
-												// 表(丸)・裏(尾)の境界がバイリニア補間で滲んで隙間や線に
-												// 見えないよう、連打胴体の描画と同様にニアレストネイバーで
-												// 描画する。
-												using (DrawModeGuard.Create())
+												float hHalf = h * rollScale / 2;
+
+												// 連打の頭・終端とも、他の音符と同じ式で求める
+												float prevX = GetX(control, camera, note.PrevNote.HBScrollMillisec, note.PrevNote.HBScrollDrawDataItem, note.PrevNote.ScrollSpeedInfo.Value);
+												float x = GetX(control, camera, note.HBScrollMillisec, note.HBScrollDrawDataItem, note.ScrollSpeedInfo.Value);
+
+												// 太鼓さん次郎と同じく、胴体は連打の頭の#SCROLLの向きに沿って
+												// (正なら頭→終端、0以下なら終端→頭へ)並べて描くため、
+												// 頭と終端の左右がその向きと逆転している場合は描画しない
+												// (例: 頭と終端で#SCROLLの符号が異なる連打)。
+												double headScrollSpeed = control.GetScrollSpeed(note.PrevNote.ScrollSpeedInfo.Value) * target.PlayOptionScrollSpeed;
+												bool isOrdered = headScrollSpeed > 0 ? prevX < x : x < prevX;
+
+												float rollLeft = Math.Min(prevX, x);
+												float rollRight = Math.Max(prevX, x);
+												if (isOrdered && target.FinishDrawPointX < rollRight && rollLeft < target.StartDrawPointX)
 												{
-													SetDrawMode(DX_DRAWMODE_NEAREST);
-
-													DrawRotaGraphFastF(x, y, scale, 0.0F, handle, DX_TRUE);
-
-													// 風船の「うしろ(尾)」を表(丸)のすぐ後方(スクロール方向の
-													// 後ろ)に並べて描画する。notes.pngでは風船の絵が48px1セルに
-													// 収まらず表(丸)・裏(尾)の2セルに分かれているため、隣接させ
-													// ないと元の1枚絵にならず尾が描画されない。
-													int backHandle = target.NoteImageControl.GetEndNoteImageHandle(note.NoteType);
-													if (backHandle != -1)
+													if (!IsNoteHide)
 													{
-														DrawRotaGraphFastF(x + NoteImageControl.GetScaledCellWidth(note.NoteType), y, scale, 0.0F, backHandle, DX_TRUE);
+														// 胴体(硬いエッジ)とキャップ(バイリニアで滲む)の補間方式が
+														// 揃っていないと、同じ色のはずの境界がわずかに滲んで継ぎ目の
+														// 線のように見えてしまうため、両方ともニアレストネイバーで描画する。
+														using (DrawModeGuard.Create())
+														{
+															SetDrawMode(DX_DRAWMODE_NEAREST);
+
+															// 高速なBPM区間では胴体が画面の何倍もの長さになることがあるため、
+															// 見た目が変わらない範囲(描画範囲の少し外側)で座標を切り詰める
+															float bodyStartX = Clamp(prevX, target.FinishDrawPointX - 100, target.StartDrawPointX + 100);
+															float bodyEndX = Clamp(x, target.FinishDrawPointX - 100, target.StartDrawPointX + 100);
+															DrawModiGraphF(bodyStartX - 1, y - hHalf, bodyEndX + 1, y - hHalf, bodyEndX + 1, y + hHalf, bodyStartX - 1, y + hHalf, handle, DX_TRUE);
+															DrawRotaGraphFastF(x, y, rollScale, 0.0F, target.NoteImageControl.GetEndNoteImageHandle(note.PrevNote.NoteType), DX_TRUE, control.GetScrollSpeed(note.ScrollSpeedInfo.Value) < 0 ? 1 : 0);
+														}
 													}
 												}
 											}
-
-											using (DrawAreaGuard.Create())
-											{
-												target.NoteText.Draw(x, y, note.NoteTextType);
-											}
-										}
+											break;
 									}
-									break;
-								case NoteType.End:
-									{
-										// 前回音符によって処理を変える
-										switch (note.PrevNote.NoteType)
-										{
-											case NoteType.Roll:
-											case NoteType.RollBig:
-												{
-													int handle = target.NoteImageControl.GetContentNoteImageHandle(note.PrevNote.NoteType);
-													GetGraphSizeF(handle, out float w, out float h);
-													float rollScale = NoteImageControl.GetScale(note.PrevNote.NoteType);
-
-													float hHalf = h * rollScale / 2;
-													float x;
-													float prevT;
-													float prevX;
-
-													if (diffTime < 0
-														&& !reFirstDrawDataItem.IsDelay)
-													{
-														x = target.JudgeFramePoint.CX + (diffTime * note.MovementPerMillisec);
-
-														prevT = (note.PrevNote.StartMillisec - nowTime);
-														prevX = target.JudgeFramePoint.CX + (prevT * note.PrevNote.MovementPerMillisec);
-													}
-													else
-													{
-														double hbscrollPivotX = reFirstDrawDataItem.GetHBScrollPivotX(per);
-														x = (float)(target.JudgeFramePoint.CX + (note.HBScrollStartPointX - hbscrollPivotX) * note.ScrollSpeedInfo.Value * target.PlayOptionScrollSpeed);
-
-														prevT = (note.PrevNote.StartMillisec - nowTime);
-														if (prevT < 0)
-														{
-															prevX = target.JudgeFramePoint.CX + (prevT * note.PrevNote.MovementPerMillisec);
-														}
-														else
-														{
-															prevX = (float)(target.JudgeFramePoint.CX + (note.PrevNote.HBScrollStartPointX - hbscrollPivotX) * note.PrevNote.ScrollSpeedInfo.Value * target.PlayOptionScrollSpeed);
-														}
-													}
-													// 連打の胴体幅が不自然に狭い(ほぼ0px)、または救済しても
-													// 中途半端に大きすぎる場合の救済・描画可否判定(Issue #18)。
-													// 詳細はHBScrollIssue18Fix.csのコメント参照。
-													x = HBScrollIssue18Fix.RescueRollEndX(
-														prevX, x,
-														note.PrevNote.HBScrollDrawDataItem,
-														note.StartMillisec - note.PrevNote.StartMillisec,
-														note.PrevNote.ScrollSpeedInfo.Value,
-														target.PlayOptionScrollSpeed);
-
-													if (HBScrollIssue18Fix.ShouldDrawRollBody(prevX, x, target.FinishDrawPointX, target.StartDrawPointX))
-													{
-														if (!IsNoteHide)
-														{
-															// 胴体(硬いエッジ)とキャップ(バイリニアで滲む)の補間方式が
-															// 揃っていないと、同じ色のはずの境界がわずかに滲んで継ぎ目の
-															// 線のように見えてしまうため、両方ともニアレストネイバーで描画する。
-															using (DrawModeGuard.Create())
-															{
-																SetDrawMode(DX_DRAWMODE_NEAREST);
-
-																DrawModiGraphF(prevX - 1, y - hHalf, x + 1, y - hHalf, x + 1, y + hHalf, prevX - 1, y + hHalf, handle, DX_TRUE);
-																DrawRotaGraphFastF(x, y, rollScale, 0.0F, target.NoteImageControl.GetEndNoteImageHandle(note.PrevNote.NoteType), DX_TRUE, note.ScrollSpeedInfo.Value < 0 ? 1 : 0);
-															}
-														}
-													}
-												}
-												break;
-										}
-									}
-									break;
-							}
+								}
+								break;
 						}
 					}
 				}
@@ -318,53 +248,20 @@ namespace Tatelier.Mini.Play
 
 		void IScoreRenderer.DrawMeasureBranchScore(BranchScore bscore, int nowTime)
 		{
-			double per = 0;
-			float x;
-			float y = target.JudgeFramePoint.CY;
-
-			var firstDrawDataItem = bscore.HBScrollDrawDataControl.ItemList.LastOrDefault(v => v.IsApplicable(nowTime));
-
-			if (firstDrawDataItem == null
-				&& nowTime < 0)
+			var control = bscore.HBScrollDrawDataControl;
+			if (control.ItemList.Count == 0)
 			{
-				firstDrawDataItem = bscore.HBScrollDrawDataControl.ItemList.LastOrDefault(v => v.IsApplicable(0));
+				return;
 			}
 
-			int diffTime;
+			var camera = control.GetCamera(nowTime);
+			float y = target.JudgeFramePoint.CY;
 
-			// レイヤー層
 			foreach (var item in bscore.Measures)
 			{
 				if (item.Visible)
 				{
-					diffTime = item.StartMillisec - nowTime;
-
-					var reFirstDrawDataItem = firstDrawDataItem;
-
-					// 音符がfirstDrawDataItemの時間範囲内の場合は、その音符の時間範囲内のデータで再構築する
-					if ((reFirstDrawDataItem == null)
-						|| (!reFirstDrawDataItem.IsDelay && reFirstDrawDataItem.IsApplicable(item)))
-					{
-						reFirstDrawDataItem = item.HBScrollDrawDataItem;
-
-						if (reFirstDrawDataItem == null)
-						{
-							continue;
-						}
-					}
-
-					per = reFirstDrawDataItem.GetElapsedRate(nowTime);
-
-					if (diffTime < 0
-						&& !reFirstDrawDataItem.IsDelay)
-					{
-						x = target.JudgeFramePoint.CX + (diffTime * item.MovementPerMillisec);
-					}
-					else
-					{
-						double hbscrollPivotX = reFirstDrawDataItem.GetHBScrollPivotX(per);
-						x = (float)(target.JudgeFramePoint.CX + (item.HBScrollStartPointX - hbscrollPivotX) * item.ScrollSpeedInfo.Value * target.PlayOptionScrollSpeed);
-					}
+					float x = GetX(control, camera, item.HBScrollMillisec, item.HBScrollDrawDataItem, item.ScrollSpeedInfo.Value);
 
 					if (target.FinishDrawPointX < x && x < target.StartDrawPointX)
 					{

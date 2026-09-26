@@ -40,6 +40,11 @@ namespace Tatelier.Score.Play.Chart.TJA
 		public bool HasHBScroll = false;
 
 		/// <summary>
+		/// BMSCROLL譜面かどうか
+		/// </summary>
+		public bool HasBMScroll = false;
+
+		/// <summary>
 		/// 譜面バージョン
 		/// </summary>
 		public string Version = null;
@@ -152,6 +157,11 @@ namespace Tatelier.Score.Play.Chart.TJA
 		public ScoreType ScoreType = ScoreType.Normal;
 
 		/// <summary>
+		/// #BMSCROLL譜面かどうか(HBSCROLLとして描画し、#SCROLLは無視する)
+		/// </summary>
+		public bool IsBMScroll = false;
+
+		/// <summary>
 		/// 音符の最大数を取得する。
 		/// ※ドンとカツのみで計算
 		/// </summary>
@@ -217,7 +227,7 @@ namespace Tatelier.Score.Play.Chart.TJA
 			GogoList.AddLast(new GogoItem()
 			{
 				Gogo = true,
-				StartTime = (int)info.PivotMillisec
+				StartTime = info.NoteMillisec
 			});
 			return SUCCESS;
 		}
@@ -226,7 +236,7 @@ namespace Tatelier.Score.Play.Chart.TJA
 			GogoList.AddLast(new GogoItem()
 			{
 				Gogo = false,
-				StartTime = (int)info.PivotMillisec
+				StartTime = info.NoteMillisec
 			});
 			return SUCCESS;
 		}
@@ -321,7 +331,14 @@ namespace Tatelier.Score.Play.Chart.TJA
 					return ERROR_PARSE;
 				}
 
-				return SetBPMCHANGE(info, bpm);
+				int ret = SetBPMCHANGE(info, bpm);
+
+				// HBSCROLL用の時刻(太鼓さん次郎と同じ方法)
+				int hbScrollMillisec = info.Tj.OnBPMChange();
+				info.BPMInfo.HBScrollStartMillisec = hbScrollMillisec;
+				info.CurrentBranchScore.BPMList.Last().HBScrollStartMillisec = hbScrollMillisec;
+
+				return ret;
 			}
 			else
 			{
@@ -413,6 +430,10 @@ namespace Tatelier.Score.Play.Chart.TJA
 				{
 					return -2;
 				}
+
+				// HBSCROLL用の時刻(太鼓さん次郎と同じ方法)
+				info.Tj.OnDelay(sec, info.BPMInfo.Value, info.CurrentBranchScore.HBScrollDelayList);
+
                 if (sec > 0)
                 {
 					var lastBpm = info.CurrentBranchScore.BPMList.LastOrDefault()?.Value ?? 0;
@@ -482,6 +503,7 @@ namespace Tatelier.Score.Play.Chart.TJA
 
 			BranchPlayInfoList.Add(playInfo);
 			info.BranchPivot = info.ShallowCopy();
+			info.BranchPivot.Tj = info.Tj.Clone();
 
 			BranchScoreControl.OneBeforeMeasureTime.Add(info.CurrentBranchScore.Measures.Reverse<IMeasureLine>().FirstOrDefault()?.StartMillisec ?? 0);
 
@@ -514,6 +536,7 @@ namespace Tatelier.Score.Play.Chart.TJA
 				throw new TJAParseException("#BRANCHSTART\nを宣言する前に\n#N, #E, #M\nを宣言しないでください。\n\n");
             }
 			info.PivotMicrosec = info.BranchPivot.PivotMicrosec;
+			info.Tj = info.BranchPivot.Tj.Clone();
 
 			info.PrevNote = info.BranchPivot.PrevNote;
 			info.PrevMeasureLine = info.BranchPivot.PrevMeasureLine;
@@ -609,7 +632,9 @@ namespace Tatelier.Score.Play.Chart.TJA
 
 			OffsetMillisec = (int)(info.OffsetMillisec * 1000);
 
-			ScoreType = info.HasHBScroll ? ScoreType.HBScroll : ScoreType.Normal;
+			// #BMSCROLLは#SCROLLを無視するHBSCROLLとして扱う(太鼓さん次郎の仕様)
+			ScoreType = (info.HasHBScroll || info.HasBMScroll) ? ScoreType.HBScroll : ScoreType.Normal;
+			IsBMScroll = !info.HasHBScroll && info.HasBMScroll;
 
 			CourseName = info.CourseName;
 
@@ -633,6 +658,7 @@ namespace Tatelier.Score.Play.Chart.TJA
 			notePivotInfo.CurrentBranchScore.ScrollSpeedList[0] = notePivotInfo.ScrollSpeedInfo;
 
 			notePivotInfo.PivotMicrosec = 0;
+			notePivotInfo.UseTaikojiroTime = ScoreType == ScoreType.HBScroll;
 			BranchScoreControl.CommonScoreList[0] = notePivotInfo.CurrentBranchScore;
 
 			bool isIgnore = false;
@@ -744,102 +770,144 @@ namespace Tatelier.Score.Play.Chart.TJA
 		/// <summary>
 		/// HBSCROLLの描画情報を設定
 		/// </summary>
+		/// <remarks>
+		/// 太鼓さん次郎(ver2.92)の実装に合わせ、BPM区間を譜面全体で1本のリストとして構築する。
+		/// 譜面分岐がある場合、太鼓さん次郎は共通部分と最初の分岐(通常は#N)のBPMCHANGEだけを
+		/// BPMリストに登録し、他の分岐はそれを共用するため、同じく分岐ごとに1つだけ採用する。
+		/// 時刻はHBSCROLL用の時刻(TaikojiroTime参照)を使う(HBSCROLL譜面では音符の判定時刻も同じ)。
+		/// 座標計算の詳細はHBScrollDrawDataControlを参照。
+		/// </remarks>
 		/// <param name="areaWidth">音符描画領域の幅</param>
 		public void SetDrawHBScrollTime(float areaWidth)
 		{
-			foreach (var branchScore in BranchScoreControl.GetAllBranchScoreList().Select(v => v.BranchScore))
+			// 採用するセクションの並び(セクションの開始時刻順、同時刻は共通部分を先にする)
+			var sections = new List<(int Key, int Order, BranchScore Score)>();
+			foreach (var item in BranchScoreControl.CommonScoreList)
 			{
-				branchScore.HBScrollDrawDataControl.Clear();
-
-				// 1周目: 全BPM区間分のdataItemを先に構築する(この時点ではまだ
-				// ノーツ・小節線への割り当ては行わない。2周目で全区間が出揃った
-				// 状態から検索できるようにするため)。
-				var pending = new List<(BPM bpmInfo, HBScrollDrawDataItem dataItem)>();
-				foreach (var bpmInfo in branchScore.BPMList)
+				sections.Add((item.Key, 0, item.Value));
+			}
+			var branchKeys = BranchScoreControl.NormalScoreList.Keys
+				.Union(BranchScoreControl.ExpertScoreList.Keys)
+				.Union(BranchScoreControl.MasterScoreList.Keys);
+			foreach (var key in branchKeys)
+			{
+				if (BranchScoreControl.NormalScoreList.TryGetValue(key, out var score)
+					|| BranchScoreControl.ExpertScoreList.TryGetValue(key, out score)
+					|| BranchScoreControl.MasterScoreList.TryGetValue(key, out score))
 				{
-					var dataItem = new HBScrollDrawDataItem()
-					{
-						StartMillisec = bpmInfo.StartMillisec,
-						FinishMillisec = bpmInfo.FinishMillisec,
-						IsDelay = bpmInfo.IsDelay,
-					};
-
-					// HBSCROLLは本来、区間の実時間経過(× BPM)ではなく、譜面の拍子構造
-					// (StartHBScrollUnit/FinishHBScrollUnit等ではなく、この実装では
-					// 実時間差×BPMの積み上げ)で進み方が決まる。この積み上げ方式自体は
-					// 参照実装(taikojiro283本家)とも一致しているため変更しない。
-					dataItem.StartPoint = branchScore.HBScrollDrawDataControl.ItemList?.LastOrDefault()?.FinishPoint ?? bpmInfo.GetDivision(dataItem.StartMillisec) * areaWidth;
-					dataItem.FinishPoint = dataItem.StartPoint + bpmInfo.GetDivision(dataItem.FinishMillisec - dataItem.StartMillisec) * areaWidth;
-
-					branchScore.HBScrollDrawDataControl.Add(dataItem);
-					pending.Add((bpmInfo, dataItem));
+					sections.Add((key, 1, score));
 				}
+			}
+			var orderedSections = sections.OrderBy(v => v.Key).ThenBy(v => v.Order).Select(v => v.Score).ToList();
 
-				// 2周目: 各ノーツ・小節線の座標を計算する。
-				// 「本来属するBPM区間」の基準は、note.BPMInfo/measure.BPMInfo(生成時点で
-				// 直接参照を持ち、以後変わらない)を使う。以前はBranchScore.Build()が
-				// NoteList/MeasureLineListへ振り分けた結果(実時間の範囲だけで判定)を基準に
-				// していたが、マイナスBPM/マイナス小節を伴う譜面では実時間の範囲が
-				// 重複することがあり、本来とは全く無関係な(はるか離れた)BPM区間の
-				// NoteListへ誤って振り分けられるケースがあった。その場合、誤った区間の
-				// IsApplicable()もたまたま真になってしまうため、後段のフォールバック探索も
-				// 働かず、無関係な音符同士が同じ座標に重なって描画されてしまっていた
-				// (連打の胴体が縮む/伸びない症状もこの一種)。
-				// note.BPMInfoは常に正しいため、これを主として使い、それでも
-				// IsApplicable()が偽の場合(マイナスBPM区間でStartMillisecが区間外に
-				// なるケース)のみ、GetNarrowestApplicable()で実際に該当する区間を
-				// 探し直すフォールバックへ回す。
-				var bpmToDataItem = new Dictionary<BPM, HBScrollDrawDataItem>();
-				foreach (var (bpmInfo, dataItem) in pending)
+			var control = new HBScrollDrawDataControl()
+			{
+				IgnoreScrollSpeed = IsBMScroll,
+				AreaWidth = areaWidth,
+			};
+
+			// BPM区間
+			// ・各セクションの先頭の区間は、セクション開始時に直前のBPMを複製したもの(太鼓さん次郎には
+			//   存在しない)なので、譜面の最初のセクション以外では除く。
+			// ・#DELAYは「BPM=0の区間」と「元のBPMで再開する区間」の2つとしてBPMListに入っているが、
+			//   太鼓さん次郎ではDELAYはBPMCHANGEとは別に管理されているため除く(DELAYは別途リストで持つ)。
+			for (int sectionIndex = 0; sectionIndex < orderedSections.Count; sectionIndex++)
+			{
+				var bpmList = orderedSections[sectionIndex].BPMList;
+				for (int i = sectionIndex == 0 ? 0 : 1; i < bpmList.Count; i++)
 				{
-					if (!bpmToDataItem.ContainsKey(bpmInfo))
-					{
-						bpmToDataItem[bpmInfo] = dataItem;
-					}
-				}
+					var bpmInfo = bpmList[i];
 
-				foreach (var note in branchScore.Notes)
-				{
-					HBScrollDrawDataItem naturalItem = null;
-					if (note.BPMInfo != null)
+					if (bpmInfo.IsDelay)
 					{
-						bpmToDataItem.TryGetValue(note.BPMInfo, out naturalItem);
-					}
-
-					var actualItem = (naturalItem != null && naturalItem.IsApplicable(note.StartMillisec))
-						? naturalItem
-						: branchScore.HBScrollDrawDataControl.GetNarrowestApplicable(note.StartMillisec) ?? naturalItem;
-					if (actualItem == null)
-					{
+						i++;
 						continue;
 					}
 
-					double per = actualItem.GetElapsedRate(note.StartMillisec);
-					per = Math.Max(0, Math.Min(1, per));
-					note.HBScrollStartPointX = actualItem.GetHBScrollPivotX(per);
-					note.HBScrollDrawDataItem = actualItem;
+					var prev = control.ItemList.LastOrDefault();
+					var dataItem = new HBScrollDrawDataItem()
+					{
+						Index = control.ItemList.Count,
+						StartMillisec = bpmInfo.HBScrollStartMillisec,
+						BPM = bpmInfo.Value,
+						PointPerMillisec = bpmInfo.GetDivision(areaWidth),
+					};
+
+					if (prev != null)
+					{
+						// 区間の長さは「次の区間の開始時刻 - この区間の開始時刻」(マイナスBPMでは負になり得る)
+						prev.FinishMillisec = dataItem.StartMillisec;
+						prev.FinishPoint = prev.GetPointAt(dataItem.StartMillisec);
+						dataItem.StartPoint = prev.FinishPoint;
+					}
+
+					control.Add(dataItem);
+				}
+			}
+
+			var last = control.ItemList.LastOrDefault();
+			if (last != null)
+			{
+				last.FinishMillisec = int.MaxValue;
+				last.FinishPoint = last.GetPointAt(last.FinishMillisec);
+			}
+
+			// #DELAY(長さが正のもののみ停止・差し引きの対象)
+			foreach (var (startMillisec, duration) in orderedSections.SelectMany(v => v.HBScrollDelayList))
+			{
+				if (duration <= 0)
+				{
+					continue;
+				}
+
+				// 太鼓さん次郎と同じく、DELAYの間にBPMCHANGEがある場合はDELAYの開始時刻をその時刻へずらし、
+				// DELAYの開始時刻以前で最後のBPMCHANGEのBPMを使う
+				int start = startMillisec;
+				double bpm = control.ItemList.FirstOrDefault()?.BPM ?? 0;
+				foreach (var item in control.ItemList)
+				{
+					if (start <= item.StartMillisec && item.StartMillisec <= start + duration)
+					{
+						start = item.StartMillisec;
+					}
+					if (item.StartMillisec <= start)
+					{
+						bpm = item.BPM;
+					}
+				}
+
+				control.DelayList.Add(new HBScrollDelay()
+				{
+					StartMillisec = start,
+					Duration = duration,
+					BPM = bpm,
+				});
+			}
+
+			foreach (var branchScore in BranchScoreControl.GetAllBranchScoreList().Select(v => v.BranchScore))
+			{
+				branchScore.HBScrollDrawDataControl = control;
+
+				foreach (var note in branchScore.Notes)
+				{
+					var item = control.GetItem(note.HBScrollMillisec);
+					if (item == null)
+					{
+						continue;
+					}
+					note.HBScrollDrawDataItem = item;
+					note.HBScrollStartPointX = item.GetPointAt(note.HBScrollMillisec);
 				}
 
 				foreach (var measure in branchScore.Measures)
 				{
-					HBScrollDrawDataItem naturalItem = null;
-					if (measure.BPMInfo != null)
-					{
-						bpmToDataItem.TryGetValue(measure.BPMInfo, out naturalItem);
-					}
-
-					var actualItem = (naturalItem != null && naturalItem.IsApplicable(measure.StartMillisec))
-						? naturalItem
-						: branchScore.HBScrollDrawDataControl.GetNarrowestApplicable(measure.StartMillisec) ?? naturalItem;
-					if (actualItem == null)
+					var item = control.GetItem(measure.HBScrollMillisec);
+					if (item == null)
 					{
 						continue;
 					}
-
-					double per = actualItem.GetElapsedRate(measure.StartMillisec);
-					per = Math.Max(0, Math.Min(1, per));
-					measure.HBScrollStartPointX = actualItem.GetHBScrollPivotX(per);
-					measure.HBScrollDrawDataItem = actualItem;
+					measure.HBScrollDrawDataItem = item;
+					measure.HBScrollStartPointX = item.GetPointAt(measure.HBScrollMillisec);
 				}
 			}
 		}
@@ -951,6 +1019,8 @@ namespace Tatelier.Score.Play.Chart.TJA
 
 			int noteNum = GetNoteNum(measureSB);
 
+			notePivotInfo.Tj.BeginMeasure(noteNum);
+
 			bool isSharpLine = false;
 			var sharpLine = new StringBuilder();
 
@@ -1022,7 +1092,10 @@ namespace Tatelier.Score.Play.Chart.TJA
 
             if (i == measureSB.Length)
             {
-				notePivotInfo.PivotMicrosec += notePivotInfo.MeasureInfo.GetCalc(Const.OneMinuteInMicrosec) / new decimal(notePivotInfo.BPMInfo.Value);
+				var measureMicrosec = notePivotInfo.MeasureInfo.GetCalc(Const.OneMinuteInMicrosec) / new decimal(notePivotInfo.BPMInfo.Value);
+				notePivotInfo.PivotMicrosec += measureMicrosec;
+				notePivotInfo.Tj.AdvanceEmptyMeasure(measureMicrosec);
+				notePivotInfo.Tj.EndMeasure(GetTaikojiroMeasureRatio(notePivotInfo.MeasureInfo));
 				return;
             }
 
@@ -1139,11 +1212,29 @@ namespace Tatelier.Score.Play.Chart.TJA
 									}
 									break;
 							}
-							notePivotInfo.PivotMicrosec += notePivotInfo.MeasureInfo.GetCalc(Const.OneMinuteInMicrosec) / (new decimal(notePivotInfo.BPMInfo.Value) * new decimal(noteNum));
+							var stepMicrosec = notePivotInfo.MeasureInfo.GetCalc(Const.OneMinuteInMicrosec) / (new decimal(notePivotInfo.BPMInfo.Value) * new decimal(noteNum));
+							notePivotInfo.PivotMicrosec += stepMicrosec;
+							notePivotInfo.Tj.AdvanceChar(stepMicrosec);
 						}
 						break;
 				}
 			}
+
+			notePivotInfo.Tj.EndMeasure(GetTaikojiroMeasureRatio(notePivotInfo.MeasureInfo));
+		}
+
+		/// <summary>
+		/// 太鼓さん次郎での小節の拍子(分子/分母)を取得する
+		/// (太鼓さん次郎は分母を符号なし整数として読むため、分母が負だとほぼ0になる)
+		/// </summary>
+		static double GetTaikojiroMeasureRatio(Measure measure)
+		{
+			double lower = measure.Lower;
+			if (lower < 0)
+			{
+				lower += 4294967296.0;
+			}
+			return measure.Upper / lower;
 		}
 	}
 }

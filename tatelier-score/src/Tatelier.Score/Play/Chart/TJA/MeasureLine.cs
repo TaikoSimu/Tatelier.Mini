@@ -64,6 +64,11 @@ namespace Tatelier.Score.Play.Chart.TJA
 
 		public HBScrollDrawDataItem HBScrollDrawDataItem { get; set; }
 
+		/// <summary>
+		/// HBSCROLL用の時刻(ms)。太鼓さん次郎と同じ方法で求めたもの(TaikojiroTime参照)
+		/// </summary>
+		public int HBScrollMillisec { get; set; }
+
         #region INoteSystem
         int INoteSystem.FinishMillisec
 		{
@@ -116,7 +121,8 @@ namespace Tatelier.Score.Play.Chart.TJA
 			}
 
 			Visible = info.BarLineState == 1;
-			StartMillisec = (int)info.PivotMillisec;
+			StartMillisec = info.NoteMillisec;
+			HBScrollMillisec = info.Tj.Now;
 			ScrollSpeedInfo = info.ScrollSpeedInfo;
 			BPMInfo = info.BPMInfo;
 		}
