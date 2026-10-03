@@ -986,6 +986,39 @@ namespace Tatelier.Score.Play.Chart.TJA
 			return result;
 		}
 
+		/// <summary>
+		/// HBSCROLL譜面で読み取る引数の最大文字数(命令名直後の空白を含む)
+		/// </summary>
+		/// <remarks>
+		/// 例: 「#MEASURE 1/60000000」は「 1/6000000」として読む。
+		/// </remarks>
+		static readonly Dictionary<string, int> TaikojiroArgLengthMap = new Dictionary<string, int>()
+		{
+			{ "BPMCHANGE", 8 },
+			{ "SCROLL", 8 },
+			{ "MEASURE", 10 },
+			{ "DELAY", 10 },
+		};
+
+		/// <summary>
+		/// 命令行から引数を取り出す
+		/// </summary>
+		/// <param name="name">命令名</param>
+		/// <param name="sharpLine">命令行('#'より後ろ)</param>
+		/// <param name="argIdx">引数の開始位置(命令名の直後)</param>
+		string[] GetSharpArgs(StringBuilder name, StringBuilder sharpLine, int argIdx)
+		{
+			int length = sharpLine.Length - argIdx;
+
+			if (ScoreType == ScoreType.HBScroll
+				&& TaikojiroArgLengthMap.TryGetValue($"{name}", out var maxLength))
+			{
+				length = Math.Min(length, maxLength);
+			}
+
+			return sharpLine.ToString(argIdx, length).Split(new char[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+		}
+
 		void DoSharpMethod(ScoreParserFuncMap funcMap, NotePivotInfo info, StringBuilder name, string[] args)
 		{
 			if (name.Length > 0)
@@ -1058,7 +1091,7 @@ namespace Tatelier.Score.Play.Chart.TJA
 								}
 								if (sharpIdx < sharpLine.Length)
 								{
-									args = sharpLine.ToString(sharpIdx, sharpLine.Length - sharpIdx).Split(new char[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+									args = GetSharpArgs(sbSharpOnly, sharpLine, sharpIdx);
 								}
 
 								DoSharpMethod(shareFuncMap, notePivotInfo, sbSharpOnly, args);
@@ -1129,7 +1162,7 @@ namespace Tatelier.Score.Play.Chart.TJA
 								}
 								if (sharpIdx < sharpLine.Length)
 								{
-									args = sharpLine.ToString(sharpIdx, sharpLine.Length - sharpIdx).Split(new char[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+									args = GetSharpArgs(sbSharpOnly, sharpLine, sharpIdx);
 								}
 
 								DoSharpMethod(shareFuncMap, notePivotInfo, sbSharpOnly, args);
